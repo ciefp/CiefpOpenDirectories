@@ -6,38 +6,35 @@ from Screens.MessageBox import MessageBox
 from Components.ScrollLabel import ScrollLabel
 from Components.MenuList import MenuList
 from Components.ActionMap import ActionMap
-from Components.Label import Label   # <-- OVO JE NEDOSTAJALO!
-from enigma import eDVBDB
-from enigma import eTimer
+from Components.Label import Label
+from enigma import eDVBDB, eTimer, eConsoleAppContainer
 import urllib.request
 import urllib.parse
 import re
 import os
+import shutil
 from datetime import datetime
-from Screens.Console import Console
 
-
-PLUGIN_VERSION = "1.1" 
+# === KONFIGURACIJA ===
+PLUGIN_VERSION = "1.1"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/"
 TMP_PATH = "/tmp/CiefpOpenDirectories/"
+OPENDIRECTORIES_FILE = PLUGIN_PATH + "opendirectories.txt"
+BACKUP_FILE = "/tmp/opendirectories_backup.txt"
+
+# === UPDATE URL-OVI ===
+VERSION_URL = "https://raw.githubusercontent.com/ciefp/CiefpOpenDirectories/main/version.txt"
+UPDATE_COMMAND = "wget -q --no-check-certificate https://raw.githubusercontent.com/ciefp/CiefpOpenDirectories/main/installer.sh -O - | /bin/sh"
+
+os.makedirs(TMP_PATH, exist_ok=True)
 
 class MainScreen(Screen):
-    # --- URL-OVI ZA UPDATE ---
-    VERSION_URL = "https://raw.githubusercontent.com/ciefp/CiefpOpenDirectories/main/version.txt"
-    INSTALLER_URL = "https://raw.githubusercontent.com/ciefp/CiefpOpenDirectories/main/installer.sh"
-
     skin = """
     <screen name="MainScreen" position="center,center" size="1200,800" title="..:: CiefpOpenDirectories v{} - First Screen ::..">
         <widget name="list" position="0,0" size="800,650" scrollbarMode="showOnDemand" />
-
-        <!-- STATUS PORUKA -->
         <widget name="status_label" position="50,660" size="700,40" font="Regular;26" 
-                halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" 
-                transparent="1" />
-
+                halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" transparent="1" />
         <ePixmap pixmap="{}background.png" position="800,0" size="400,800" alphatest="on" />
-
-        <!-- Dugmad -->
         <ePixmap pixmap="buttons/red.png" position="50,720" size="35,35" alphatest="blend" />
         <eLabel text="Exit" position="100,710" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
         <ePixmap pixmap="buttons/green.png" position="500,720" size="35,35" alphatest="blend" />
@@ -49,31 +46,25 @@ class MainScreen(Screen):
         self["list"] = MenuList([], enableWrapAround=True)
         self["list"].selectionEnabled(1)
         self["status_label"] = Label("")
-        self["status_label"].setText("")
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"],
+                                    {"ok": self.select, "cancel": self.exit, "red": self.exit, "green": self.select}, -2)
 
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "WizardActions", "ListboxActions"],
-                                    {
-                                        "ok": self.select,
-                                        "cancel": self.exit,
-                                        "red": self.exit,
-                                        "green": self.select
-                                    }, -2)
-
-        # Navigacija
         self["list"].moveUp = self["list"].up
         self["list"].moveDown = self["list"].down
-        self["list"].selectionEnabled(1)
+
+        # === UPDATE SETUP ===
+        self.container = eConsoleAppContainer()
+        self.container.appClosed.append(self.command_finished)
+        self.container.dataAvail.append(self.version_data_avail)
+        self.version_check_in_progress = False
+        self.version_buffer = b''
 
         self.loadAddresses()
-
-        # Pokreni proveru update-a nakon 1.5 sekundi
-        self.update_timer = eTimer()
-        self.update_timer.callback.append(self.check_for_updates)
-        self.update_timer.start(1500, True)
+        self.check_for_updates()  # Odmah provjeri update
 
     def loadAddresses(self):
         try:
-            with open(PLUGIN_PATH + "opendirectories.txt", "r") as f:
+            with open(OPENDIRECTORIES_FILE, "r") as f:
                 addresses = [line.strip() for line in f.readlines() if line.strip()]
             self["list"].setList(addresses)
             if not addresses:
@@ -84,39 +75,49 @@ class MainScreen(Screen):
 
     def select(self):
         url = self["list"].getCurrent()
+        if url and not url.endswith('/'):
+            url += '/'
         if url:
-            if not url.endswith('/'):
-                url += '/'
             self.session.open(ContentScreen, url)
 
     def exit(self):
         self.close()
 
-    # ====================== AUTO-UPDATE METODE ======================
+    # ====================== UPDATE LOGIKA ======================
 
     def check_for_updates(self):
+        if self.version_check_in_progress:
+            return
+        self.version_check_in_progress = True
         self["status_label"].setText("Checking for updates...")
         try:
-            cmd = f"wget -q --no-check-certificate -O /tmp/version.txt '{self.VERSION_URL}' && echo SUCCESS"
-            self.container = Console()
-            self.container.ePopen(cmd, self.update_check_finished)
+            self.container.execute(f"wget -q --timeout=10 -O - {VERSION_URL}")
         except Exception as e:
+            self.version_check_in_progress = False
             self["status_label"].setText("Update check failed.")
             print("[CiefpOpenDirectories] Update error:", e)
 
-    def update_check_finished(self, result, retval, extra_args):
-        if "SUCCESS" in result:
-            try:
-                with open("/tmp/version.txt", "r") as f:
-                    remote_version = f.read().strip()
-                os.remove("/tmp/version.txt")
+    def version_data_avail(self, data):
+        self.version_buffer += data
 
-                if remote_version != PLUGIN_VERSION and remote_version:
+    def command_finished(self, retval):
+        if self.version_check_in_progress:
+            self.version_check_closed(retval)
+        else:
+            self.update_completed(retval)
+
+    def version_check_closed(self, retval):
+        self.version_check_in_progress = False
+        if retval == 0:
+            try:
+                remote_version = self.version_buffer.decode().strip()
+                self.version_buffer = b''
+                if remote_version != PLUGIN_VERSION:
                     self["status_label"].setText(f"Update available: v{remote_version}")
                     self.session.openWithCallback(
                         self.start_update,
                         MessageBox,
-                        f"New version: v{remote_version}\n"
+                        f"New version available: v{remote_version}\n"
                         f"Current: v{PLUGIN_VERSION}\n\n"
                         f"Install now?",
                         MessageBox.TYPE_YESNO
@@ -125,34 +126,40 @@ class MainScreen(Screen):
                     self["status_label"].setText("Up to date.")
             except Exception as e:
                 self["status_label"].setText("Version check failed.")
-                print("[CiefpOpenDirectories] Version error:", e)
+                print("[CiefpOpenDirectories] Decode error:", e)
         else:
-            self["status_label"].setText("Failed to check update.")
+            self["status_label"].setText("Update check failed.")
 
     def start_update(self, answer):
-        if answer:
-            self["status_label"].setText("Updating...")
-            cmdlist = [
-                f"wget -q --no-check-certificate -O /tmp/installer.sh '{self.INSTALLER_URL}'",
-                "chmod +x /tmp/installer.sh",
-                "/tmp/installer.sh",
-                "rm -f /tmp/installer.sh"
-            ]
-            self.session.openWithCallback(
-                self.update_finished,
-                Console,
-                title="Updating CiefpOpenDirectories...",
-                cmdlist=cmdlist,
-                closeOnSuccess=False
-            )
-        else:
+        if not answer:
             self["status_label"].setText("Update cancelled.")
+            return
 
-    def update_finished(self, *args, **kwargs):
-        self.session.open(MessageBox,
-            "Update completed!\n"
-            "Enigma2 will restart in 3 seconds...",
-            MessageBox.TYPE_INFO, timeout=3)
+        try:
+            # Backup opendirectories.txt
+            if os.path.exists(OPENDIRECTORIES_FILE):
+                shutil.copy2(OPENDIRECTORIES_FILE, BACKUP_FILE)
+                print(f"[CiefpOpenDirectories] Backup: {OPENDIRECTORIES_FILE} → {BACKUP_FILE}")
+            self["status_label"].setText("Updating plugin...")
+            self.container.execute(UPDATE_COMMAND)
+        except Exception as e:
+            self["status_label"].setText("Backup failed.")
+            print("[CiefpOpenDirectories] Backup error:", e)
+
+    def update_completed(self, retval):
+        try:
+            # Restore backup
+            if os.path.exists(BACKUP_FILE):
+                shutil.move(BACKUP_FILE, OPENDIRECTORIES_FILE)
+                print(f"[CiefpOpenDirectories] Restored: {BACKUP_FILE} → {OPENDIRECTORIES_FILE}")
+            if retval == 0:
+                self["status_label"].setText("Update successful! Restarting...")
+                self.container.execute("sleep 2 && killall -9 enigma2")
+            else:
+                self["status_label"].setText("Update failed.")
+        except Exception as e:
+            self["status_label"].setText("Restore failed.")
+            print("[CiefpOpenDirectories] Restore error:", e)
 
 class ContentScreen(Screen):
     skin = """
