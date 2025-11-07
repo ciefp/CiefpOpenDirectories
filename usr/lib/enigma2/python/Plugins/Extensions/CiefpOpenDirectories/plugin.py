@@ -13,10 +13,10 @@ import urllib.parse
 import re
 import os
 from datetime import datetime
+from Screens.Console import Console
 
 
-
-PLUGIN_VERSION = "1.0" 
+PLUGIN_VERSION = "1.1" 
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/"
 TMP_PATH = "/tmp/CiefpOpenDirectories/"
 os.makedirs(TMP_PATH, exist_ok=True)
@@ -24,21 +24,29 @@ os.makedirs(TMP_PATH, exist_ok=True)
 
 class MainScreen(Screen):
     skin = """
-    <screen name="MainScreen" position="center,center" size="1200,800" title="..:: CiefpOpenDirectories - First Screen ::..">
-        <widget name="list" position="0,0" size="800,700" scrollbarMode="showOnDemand" />
+    <screen name="MainScreen" position="center,center" size="1200,800" title="..:: CiefpOpenDirectories v{} - First Screen ::..">
+        <widget name="list" position="0,0" size="800,650" scrollbarMode="showOnDemand" />
+
+        <!-- STATUS PORUKA -->
+        <widget name="status_label" position="50,660" size="700,40" font="Regular;26" 
+                halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" 
+                transparent="1" />
+
         <ePixmap pixmap="%sbackground.png" position="800,0" size="400,800" alphatest="on" />
-        <!-- Dugmad za MainScreen -->
+
+        <!-- Dugmad -->
         <ePixmap pixmap="buttons/red.png" position="50,720" size="35,35" alphatest="blend" />
         <eLabel text="Exit" position="100,710" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
-
         <ePixmap pixmap="buttons/green.png" position="500,720" size="35,35" alphatest="blend" />
         <eLabel text="Select" position="550,710" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
-    </screen>""" % PLUGIN_PATH
+    </screen>""" % (PLUGIN_VERSION, PLUGIN_PATH)
 
     def __init__(self, session):
         Screen.__init__(self, session)
         self["list"] = MenuList([], enableWrapAround=True)
         self["list"].selectionEnabled(1)
+        self["status_label"] = Label("")  # Prazno na početku
+        self["status_label"].setText("")  # Sigurnost
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "WizardActions", "ListboxActions"],
                             {
                                 "ok": self.select,
@@ -47,7 +55,9 @@ class MainScreen(Screen):
                                 "green": self.select
                             }, -2)
 
-        # poveži navigaciju direktno na listu
+        # poveži navigaciju direktno na listuself.update_timer = eTimer()
+        self.update_timer.callback.append(self.check_for_updates)
+        self.update_timer.start(1500, True)  # 1.5s nakon starta
         self["list"].moveUp = self["list"].up
         self["list"].moveDown = self["list"].down
         self["list"].selectionEnabled(1)
@@ -83,23 +93,21 @@ class MainScreen(Screen):
 
 class ContentScreen(Screen):
     skin = """
-    <screen name="ContentScreen" position="center,center" size="1800,800" title="..:: Directory Content - Second Screen ::..">
-        <widget name="content_list" position="0,0" size="600,700" scrollbarMode="showOnDemand" />
-        <widget name="selected_list" position="600,0" size="800,700" font="Regular;22" scrollbarMode="showOnDemand" />
-        <ePixmap pixmap="%sbackground.png" position="1400,0" size="400,800" alphatest="on" />
-        <!-- Dugmad za ContentScreen -->
+    <screen name="ContentScreen" position="center,center" size="1800,800" title="..:: Directory Content v{} - Second Screen ::..">
+        <widget name="content_list" position="0,0" size="700,700" font="Regular;22" scrollbarMode="showOnDemand" />
+        <widget name="selected_list" position="750,0" size="650,700" font="Regular;20" scrollbarMode="showOnDemand" />
+        <ePixmap pixmap="{}background.png" position="1400,0" size="400,800" alphatest="on" />
+        <!-- Dugmad -->
         <ePixmap pixmap="buttons/red.png" position="50,720" size="35,35" alphatest="blend" />
         <eLabel text="Back" position="100,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
-
         <ePixmap pixmap="buttons/green.png" position="320,720" size="35,35" alphatest="blend" />
-        <eLabel text="Select" position="370,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
-
+        <eLabel text="Select Folder" position="370,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
         <ePixmap pixmap="buttons/yellow.png" position="590,720" size="35,35" alphatest="blend" />
         <eLabel text="Create" position="640,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
-
         <ePixmap pixmap="buttons/blue.png" position="860,720" size="35,35" alphatest="blend" />
         <eLabel text="All" position="910,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
-    </screen>""" % PLUGIN_PATH
+    </screen>""".format(PLUGIN_VERSION, PLUGIN_PATH)
+
 
     def __init__(self, session, base_url):
         Screen.__init__(self, session)
@@ -113,13 +121,12 @@ class ContentScreen(Screen):
         self["content_list"] = MenuList([], enableWrapAround=True)
         self["content_list"].selectionEnabled(1)
         self["selected_list"] = ScrollLabel("")
-
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "WizardActions", "ListboxActions"],
                                     {
-                                        "ok": self.selectItem,
+                                        "ok": self.selectItem,  # OK: navigacija ili selekcija fajla
                                         "cancel": self.goBack,
                                         "red": self.goBack,
-                                        "green": self.selectItem,
+                                        "green": self.selectFolder,  # Novo: zeleno za selekciju cijelog foldera
                                         "yellow": self.createFile,
                                         "blue": self.selectAll
                                     }, -2)
@@ -142,46 +149,120 @@ class ContentScreen(Screen):
     def errorCallback(self, ret=None):
         self.goBack()  # Automatski se vrati nazad ako je greška
 
+    def _parse_directory(self, directory_url):
+        """Parsira direktorij i vraća listu (name, full_url, 'file') ili 'folder'"""
+        items = []
+        try:
+            req = urllib.request.Request(directory_url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            response = urllib.request.urlopen(req, timeout=30)
+            html = response.read().decode('utf-8', errors='ignore')
+
+            links = re.findall(r'<a\s+href="([^"]+)"[^>]*>([^<]+)</a>', html)
+
+            for href, raw_name in links:
+                href = href.strip()
+                raw_name = raw_name.strip()
+
+                if href.startswith('?'):
+                    continue
+
+                href_clean = href.split('?')[0].split('#')[0]
+                if not href_clean or href_clean in ('../', './'):
+                    continue
+
+                try:
+                    decoded_href = urllib.parse.unquote(href_clean)
+                except:
+                    decoded_href = href_clean
+
+                full_url = urllib.parse.urljoin(directory_url, href_clean)
+
+                # Očisti prikazani naziv
+                display_name = raw_name
+                if '&gt;' in display_name:
+                    display_name = display_name.replace('&gt;', '') + '...'
+
+                # Folder
+                if href_clean.endswith('/'):
+                    folder_name = display_name.rstrip('/') if display_name.endswith('/') else display_name
+                    items.append((folder_name, full_url, 'folder'))
+                # Fajl
+                elif decoded_href.lower().endswith(('.mp4', '.mkv', '.mp3', '.flac', '.avi', '.ts')):
+                    # Ako je naziv prekratak → koristi puni iz href-a
+                    if '...' in display_name or len(display_name) < len(decoded_href) - 10:
+                        display_name = urllib.parse.unquote(os.path.basename(href_clean))
+                    items.append((display_name, full_url, 'file'))
+
+        except Exception as e:
+            print(f"[CiefpOpenDirectories] _parse_directory error: {e}")
+
+        return items
+
     def loadContent(self):
         self["content_list"].setList([])
         self.content_items = []
         self.load_error = None
 
-        try:
-            req = urllib.request.Request(self.current_url, headers={'User-Agent': 'Mozilla/5.0'})
-            response = urllib.request.urlopen(req, timeout=10)
-            html = response.read().decode('utf-8', errors='ignore')
-            links = re.findall(r'<a\s+href="([^"]+)"[^>]*>([^<]+)</a>', html)
-            items = []
-            for href, name in links:
-                href = href.split('?')[0].strip()
-                name = name.strip()
-                if href in ('../', './') or name.startswith('?') or 'Parent Directory' in name:
-                    continue
-                full_url = urllib.parse.urljoin(self.current_url, href)
-                if href.endswith('/'):
-                    display_name = name.rstrip('/') if name.endswith('/') else name
-                    items.append((display_name, full_url, 'folder'))
-                elif name.lower().endswith(('.mp4', '.mkv', '.mp3', '.flac', '.avi', '.ts')):  # dodaj još ekstenzija po želji
-                    items.append((name, full_url, 'file'))
-            items.sort(key=lambda x: (x[2] != 'folder', x[0].lower()))
-            self.content_items = items
-            self["content_list"].setList(
-                [f"{'[FOLDER]' if item[2] == 'folder' else '[FILE]'} {item[0]}" for item in items]
-            )
-            if not items:
-                self["content_list"].setList(["[INFO] The directory is empty."])
+        items = self._parse_directory(self.current_url)
 
-        except urllib.error.URLError as e:
-            reason = str(e.reason) if hasattr(e, 'reason') else str(e)
-            if 'timed out' in reason.lower():
-                self.load_error = "Timeout: Server is not responding."
-            else:
-                self.load_error = f"URL error: {reason}"
-            print("[CiefpOpenDirectories] Load error:", e)
-        except Exception as e:
-            self.load_error = f"Unexpected error: {str(e)}"
-            print("[CiefpOpenDirectories] Load error:", e)
+        file_count = len([i for i in items if i[2] == 'file'])
+        print(f"[CiefpOpenDirectories] loadContent - Files: {file_count}, Folders: {len(items) - file_count}")
+
+        items.sort(key=lambda x: (x[2] != 'folder', x[0].lower()))
+        self.content_items = items
+        self["content_list"].setList(
+            [f"{'[FOLDER]' if item[2] == 'folder' else '[FILE]'} {item[0]}" for item in items]
+        )
+        if not items:
+            self["content_list"].setList(["[INFO] The directory is empty."])
+
+    def selectFolder(self):
+        idx = self["content_list"].getSelectedIndex()
+        if idx is None or idx >= len(self.content_items):
+            return
+        item = self.content_items[idx]
+        if item[2] != 'folder':
+            self.session.open(MessageBox, "This is not a folder! Use OK to select files.", MessageBox.TYPE_WARNING,
+                              timeout=3)
+            return
+
+        import time
+        start_time = time.time()  # Počni mjerenje vremena
+        folder_count = [0]  # Koristimo listu jer Python ne dozvoljava promjenu int u closure-u
+
+        # Počni rekurziju
+        added_files = self._recursive_select_folder(item[1], folder_count)
+
+        elapsed = time.time() - start_time  # Završi mjerenje
+
+        self.updateSelectedList()
+
+        if added_files:
+            self.session.open(MessageBox,
+                              f"Successfully added {len(added_files)} files!\n"
+                              f"From {folder_count[0]} folders in {elapsed:.1f} seconds.",
+                              MessageBox.TYPE_INFO, timeout=6)
+        else:
+            self.session.open(MessageBox, "No files found in this folder.", MessageBox.TYPE_INFO, timeout=3)
+
+    def _recursive_select_folder(self, folder_url, folder_count, added=None):
+        if added is None:
+            added = []
+
+        # Povećaj brojač foldera
+        folder_count[0] += 1
+
+        items = self._parse_directory(folder_url)
+        for item in items:
+            if item[2] == 'folder':
+                self._recursive_select_folder(item[1], folder_count, added)
+            elif item[2] == 'file' and item not in self.selected:
+                self.selected.append(item)
+                added.append(item)
+
+        return added
 
     def selectItem(self):
         idx = self["content_list"].getSelectedIndex()
@@ -232,12 +313,9 @@ class ContentScreen(Screen):
             return
         typ, _ = choice
 
-        # Podrazumevani naziv
-        now = datetime.now()
-        dt_str = now.strftime("%d.%m.%Y_%H:%M")
-        default_name = f"IPTV OPD {dt_str}"
+        # Čist default naziv — korisnik može dodati datum ako želi
+        default_name = "IPTV OPD"
 
-        # Otvori virtuelnu tastaturu za unos naziva
         self.session.openWithCallback(
             lambda new_name: self.finalizeCreation(typ, new_name or default_name),
             VirtualKeyBoard,
@@ -251,16 +329,19 @@ class ContentScreen(Screen):
             self.session.open(MessageBox, "No files selected!", MessageBox.TYPE_WARNING)
             return
 
+        # Generiši jedinstveni brojač (samo za M3U, ali koristimo isti pristup)
         counter = len([f for f in os.listdir(TMP_PATH) if f.endswith('.m3u')]) + 1
+
+        # Format datuma: 07112025_1815 (bez . i :)
         now = datetime.now()
-        dt_str = now.strftime("%d.%m.%Y_%H:%M")
+        dt_str = now.strftime("%d%m%Y_%H%M")
+
+        # Očisti naziv za fajl sistem
+        safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_name = safe_name.replace(' ', '_').strip('_')
 
         if typ == "m3u":
-            # Kreiraj bezbedan naziv fajla
-            safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_name = safe_name.replace(' ', '_')
-            filename = f"{TMP_PATH}{safe_name}_{counter}.m3u"
-
+            filename = f"{TMP_PATH}{safe_name}_{dt_str}_{counter}.m3u"
             with open(filename, "w") as f:
                 f.write("#EXTM3U\n")
                 for item in self.selected:
@@ -270,39 +351,89 @@ class ContentScreen(Screen):
                               MessageBox.TYPE_INFO)
 
         elif typ == "bouquet":
-            # Kreiraj bezbedan naziv fajla
-            safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            safe_name = safe_name.replace(' ', '_')
-            safe_dt = dt_str.replace(':', '')
-            filename = f"userbouquet.{safe_name}_{safe_dt}_{counter}.tv"
+            # Kreiraj naziv fajla
+            filename = f"userbouquet.{safe_name}_{dt_str}_{counter}.tv"
             path = "/etc/enigma2/" + filename
 
             with open(path, "w") as f:
-                f.write(f"#NAME {name}\n")
+                f.write(f"#NAME {name}\n")  # Pravi naziv bouqueta
                 for item in self.selected:
                     url = item[1]
-                    name = item[0]
-                    lower_name = name.lower()
+                    item_name = item[0]
+                    lower_name = item_name.lower()
                     is_audio = lower_name.endswith(('.mp3', '.flac'))
                     service_type = "2" if is_audio else "1"
-                    # Uvek koristi http prefix u enkodingu
+
+                    # Enkodiranje URL-a
                     if url.startswith('https://'):
                         prefix = 'https%3a//'
                         url_part = url[8:]
                     else:
                         prefix = 'http%3a//'
                         url_part = url[7:] if url.startswith('http://') else url
-                    encoded_url = prefix + url_part.replace('/', '%2f').replace(':', '%3a').replace('?', '%3f').replace('&', '%26')
-                    f.write(f"#SERVICE 4097:0:{service_type}:0:0:0:0:0:0:0:{encoded_url}:{name}\n")
-                    f.write(f"#DESCRIPTION {name}\n")
 
+                    encoded_url = prefix + url_part.replace('/', '%2f').replace(':', '%3a').replace('?', '%3f').replace(
+                        '&', '%26')
+                    f.write(f"#SERVICE 4097:0:{service_type}:0:0:0:0:0:0:0:{encoded_url}:{item_name}\n")
+                    f.write(f"#DESCRIPTION {item_name}\n")
+
+            # Dodaj u bouquets.tv
             with open("/etc/enigma2/bouquets.tv", "a") as f:
                 f.write(f'#SERVICE 1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "{filename}" ORDER BY bouquet\n')
 
+            # Reload bouqueta
             eDVBDB.getInstance().reloadBouquets()
             eDVBDB.getInstance().reloadServicelist()
-            self.session.open(MessageBox, f"Userbouquet created:{name}\nBouquets.tv reloaded!", MessageBox.TYPE_INFO)
 
+            # PRAVI naziv bouqueta u poruci
+            self.session.open(MessageBox,
+                              f"Userbouquet created: {name}\nBouquets.tv reloaded!",
+                              MessageBox.TYPE_INFO)
+def check_for_updates(self):
+    self["status_label"].setText("Checking for updates...")
+    try:
+        self.container = Console()
+        self.container.ePopen("wget -q --no-check-certificate -O /tmp/version.txt '%s' && echo SUCCESS" % VERSION_URL, self.update_check_finished)
+    except Exception as e:
+        self["status_label"].setText("Update check failed.")
+        print("[CiefpOpenDirectories] Update error:", e)
+
+def update_check_finished(self, result, retval, extra_args):
+    if "SUCCESS" in result:
+        try:
+            with open("/tmp/version.txt", "r") as f:
+                remote_version = f.read().strip()
+            os.remove("/tmp/version.txt")
+
+            if remote_version != PLUGIN_VERSION and remote_version:
+                self["status_label"].setText(f"Update available: v{remote_version}")
+                self.session.openWithCallback(
+                    self.start_update,
+                    MessageBox,
+                    f"New version: v{remote_version}\n"
+                    f"Current: v{PLUGIN_VERSION}\n\n"
+                    f"Install now?",
+                    MessageBox.TYPE_YESNO
+                )
+            else:
+                self["status_label"].setText("Up to date.")
+        except Exception as e:
+            self["status_label"].setText("Version check failed.")
+    else:
+        self["status_label"].setText("Failed to check update.")
+
+def start_update(self, answer):
+    if answer:
+        self["status_label"].setText("Updating...")
+        # ... pokreni installer.sh ...
+    else:
+        self["status_label"].setText("Update cancelled.")
+
+def update_finished(self, *args, **kwargs):
+    self.session.open(MessageBox,
+        "Update completed!\n"
+        "Enigma2 will restart in 3 seconds...",
+        MessageBox.TYPE_INFO, timeout=3)
 
 def main(session, **kwargs):
     session.open(MainScreen)
