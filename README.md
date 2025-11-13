@@ -116,7 +116,11 @@ reboot
 
 ## Screenshots
 
-> *(Add later – recommended: 3-4 images: main menu, content, scrape, create)*
+> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot1.jpg)*
+> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot2.jpg)*
+> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot3.jpg)*
+> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot4.jpg)*
+
 
 ---
 
