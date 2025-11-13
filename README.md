@@ -116,10 +116,10 @@ reboot
 
 ## Screenshots
 
-> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot1.jpg)*
-> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot2.jpg)*
-> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot3.jpg)*
-> *(https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot4.jpg)*
+![Main](https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot1.jpg)| 
+![Main](https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot2.jpg)| 
+![Main](https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot3.jpg)| 
+![Main](https://github.com/ciefp/CiefpOpenDirectories/blob/main/screenshot4.jpg)| 
 
 
 ---
