@@ -1,3 +1,4 @@
+
 # CiefpOpenDirectories v1.2  
 **Open Directories Browser & Playlist Creator**  
 *Enigma2 Plugin – Browse, Scrape & Generate M3U/Bouquet*
@@ -107,3 +108,44 @@ scp -r CiefpOpenDirectories/ root@box:/usr/lib/enigma2/python/Plugins/Extensions
 
 # 3. Restart Enigma2
 reboot
+```
+
+> Or use `installer.sh` (if available)
+
+---
+
+## Screenshots
+
+> *(Add later – recommended: 3-4 images: main menu, content, scrape, create)*
+
+---
+
+## Future Plans (v1.3+)
+
+- [ ] Delete URLs from list  
+- [ ] Sort by name/size/extension  
+- [ ] Search by filename  
+- [ ] Support for `.zip`, `.rar` (preview content)  
+- [ ] IPTV export (PVR)  
+- [ ] Accurate progress bar (estimated total)
+
+---
+
+## Credits
+
+> **@ciefp** – author & visionary  
+> Community – testing, feedback, ideas  
+
+---
+
+## License
+
+```
+GNU GPL v3.0
+```
+
+---
+
+> **Happy Open Directory hunting!**  
+> *If you like the plugin – leave a star on GitHub!*
+```
