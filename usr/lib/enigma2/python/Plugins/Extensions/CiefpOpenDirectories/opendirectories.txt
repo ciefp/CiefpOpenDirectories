@@ -1,10 +1,8 @@
 https://dl2.netpaak.ir/media/serial/
 https://dl2.netpaak.ir/media/film
 https://dl2.netpaak.ir/media/animation
-http://95.161.165.141/music/losslessMusic/
-https://mirror.hep.gg/Media
-https://mirror.hep.gg/Media/TV_Shows
-https://mirror.hep.gg/Media/Movies/
+https://dl2.tarahipro.ir
+https://dl2.tarahipro.ir/1404
 http://103.145.76.250/Data/movies/hollywood/2025/
 http://103.145.76.250/Data/movies/hollywood/2024/
 http://103.145.76.250/Data/movies/hollywood/2023/
@@ -33,6 +31,7 @@ http://104.251.123.41/
 https://kodi.tatanos.fr
 https://kodi.tatanos.fr/Series
 https://kodi.tatanos.fr/Musique
+http://95.161.165.141/music/losslessMusic/
 http://dora-robo.com/muzyka/70's-80's-90's%20/
 http://dora-robo.com/muzyka/skladanki/
 http://dora-robo.com/muzyka/pop-dance/
@@ -44,8 +43,12 @@ https://www.ashleecadell.com/xyzstorelibrary
 https://www.ashleecadell.com/xyzstorelibrary/Various%20Artists/Ultimate%2080s
 https://buddigthoma.com/mp3s_all/(VARIOUS)
 https://buddigthoma.com/mp3s_all
-http://www.maslovd.ru/public/mp3/
 http://b1g-arch1ve.buho.ch
 http://b1g-arch1ve.buho.ch/trance/
+http://www.maslovd.ru/public/mp3/
 http://www.maslovd.ru/public/torrent/
 http://www.maslovd.ru/public/torrent/clips/
+http://srv.fabobox.com/test/
+https://mirror.hep.gg/Media
+https://mirror.hep.gg/Media/TV_Shows
+https://mirror.hep.gg/Media/Movies/

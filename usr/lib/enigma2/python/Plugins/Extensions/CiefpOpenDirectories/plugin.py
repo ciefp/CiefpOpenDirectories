@@ -23,7 +23,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # === KONFIGURACIJA ===
-PLUGIN_VERSION = "1.2"
+PLUGIN_VERSION = "1.3"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/"
 TMP_PATH = "/tmp/CiefpOpenDirectories/"
 OPENDIRECTORIES_FILE = PLUGIN_PATH + "opendirectories.txt"
@@ -60,19 +60,19 @@ UPDATE_COMMAND = "wget -q --no-check-certificate https://raw.githubusercontent.c
 # =================================== MAIN SCREEN ===================================
 class MainScreen(Screen):
     skin = """
-    <screen name="MainScreen" position="center,center" size="1800,800" title="..:: CiefpOpenDirectories v{} - Main Menu ::..">
-        <widget name="list" position="0,0" size="1400,700" scrollbarMode="showOnDemand" font="Regular;24" />
-        <widget name="status_label" position="50,710" size="1300,40" font="Regular;26" halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" transparent="1" />
+    <screen name="MainScreen" position="center,center" size="1800,900" title="..:: CiefpOpenDirectories v{} - Main Menu ::..">
+        <widget name="list" position="0,0" size="1400,800" scrollbarMode="showOnDemand" itemHeight="33" font="Regular;28"  />
+        <widget name="status_label" position="1250,820" size="400,40" font="Regular;26" halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" transparent="1" />
         <ePixmap pixmap="{}background.png" position="1400,0" size="400,800" alphatest="on" />
         <!-- Dugmad -->
-        <ePixmap pixmap="buttons/red.png" position="50,750" size="35,35" alphatest="blend" />
-        <eLabel text="Exit" position="100,740" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/green.png" position="350,750" size="35,35" alphatest="blend" />
-        <eLabel text="Add URL" position="400,740" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/yellow.png" position="650,750" size="35,35" alphatest="blend" />
-        <eLabel text="Settings" position="700,740" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/blue.png" position="950,750" size="35,35" alphatest="blend" />
-        <eLabel text="Scrape" position="1000,740" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
+        <ePixmap pixmap="buttons/red.png" position="50,830" size="35,35" alphatest="blend" />
+        <eLabel text="Exit" position="100,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
+        <ePixmap pixmap="buttons/green.png" position="350,830" size="35,35" alphatest="blend" />
+        <eLabel text="Add URL" position="400,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
+        <ePixmap pixmap="buttons/yellow.png" position="650,830" size="35,35" alphatest="blend" />
+        <eLabel text="Settings" position="700,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
+        <ePixmap pixmap="buttons/blue.png" position="950,830" size="35,35" alphatest="blend" />
+        <eLabel text="Scrape" position="1000,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
     </screen>""".format(PLUGIN_VERSION, PLUGIN_PATH)
 
     def __init__(self, session):
@@ -544,7 +544,7 @@ class ScrapeScreen(Screen):
 class ContentScreen(Screen):
     skin = """
     <screen name="ContentScreen" position="center,center" size="1800,800" title="..:: Directory Content v{} - Second Screen ::..">
-        <widget name="content_list" position="0,0" size="700,700" font="Regular;22" scrollbarMode="showOnDemand" />
+        <widget name="content_list" position="0,0" size="700,700" itemHeight="33" font="Regular;28"  scrollbarMode="showOnDemand" />
         <widget name="selected_list" position="750,0" size="650,700" font="Regular;20" scrollbarMode="showOnDemand" />
         <ePixmap pixmap="{}background.png" position="1400,0" size="400,800" alphatest="on" />
         <!-- Dugmad -->
