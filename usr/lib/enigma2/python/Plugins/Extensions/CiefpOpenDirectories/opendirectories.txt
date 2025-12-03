@@ -3,12 +3,11 @@ https://dl2.netpaak.ir/media/film
 https://dl2.netpaak.ir/media/animation
 https://dl2.tarahipro.ir
 https://dl2.tarahipro.ir/1404
-http://103.145.76.250/Data/movies/hollywood/2025/
-http://103.145.76.250/Data/movies/hollywood/2024/
-http://103.145.76.250/Data/movies/hollywood/2023/
-http://103.145.76.250/Data/movies/hollywood/2022/
-http://103.145.76.250/Data/movies/hollywood/others/
-http://103.145.76.250/Data/tvseries/new/
+http://103.145.232.246/Data/movies/hollywood/2025/
+http://103.145.232.246/Data/movies/hollywood/2024/
+http://103.145.232.246/Data/movies/hollywood/2023/
+http://103.145.232.246/Data/movies/hollywood/2022/
+http://103.145.232.246/Data/movies/Hollywood/best/
 http://103.145.232.246/Data/movies/Hollywood/
 http://103.145.232.246/Data/tvseries/English/
 http://103.145.232.246/Data/tvseries/new/
@@ -26,7 +25,6 @@ http://84.54.185.70:8022/My%20Music/
 http://23.147.64.113/movies/Other/
 http://23.147.64.113/movies/Anime%20Movies/
 http://23.147.64.113/movies/Shitty%20CAMs/
-https://cool.upera.in
 http://104.251.123.41/
 https://kodi.tatanos.fr
 https://kodi.tatanos.fr/Series
