@@ -23,7 +23,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # === KONFIGURACIJA ===
-PLUGIN_VERSION = "1.3"
+PLUGIN_VERSION = "1.4"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/"
 TMP_PATH = "/tmp/CiefpOpenDirectories/"
 OPENDIRECTORIES_FILE = PLUGIN_PATH + "opendirectories.txt"
@@ -62,7 +62,7 @@ class MainScreen(Screen):
     skin = """
     <screen name="MainScreen" position="center,center" size="1800,900" title="..:: CiefpOpenDirectories v{} - Main Menu ::..">
         <widget name="list" position="0,0" size="1400,800" scrollbarMode="showOnDemand" itemHeight="33" font="Regular;28"  />
-        <widget name="status_label" position="1250,820" size="400,40" font="Regular;26" halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" transparent="1" />
+        <widget name="status_label" position="1550,820" size="200,40" font="Regular;26" halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" transparent="1" />
         <ePixmap pixmap="{}background.png" position="1400,0" size="400,800" alphatest="on" />
         <!-- Dugmad -->
         <ePixmap pixmap="buttons/red.png" position="50,830" size="35,35" alphatest="blend" />
@@ -73,6 +73,8 @@ class MainScreen(Screen):
         <eLabel text="Settings" position="700,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
         <ePixmap pixmap="buttons/blue.png" position="950,830" size="35,35" alphatest="blend" />
         <eLabel text="Scrape" position="1000,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
+        <ePixmap pixmap="buttons/green.png" position="1250,830" size="35,35" alphatest="blend" />
+        <eLabel text="MENU: More" position="1300,820" size="200,50" font="Regular;24" foregroundColor="white" backgroundColor="#023030" halign="center" valign="center" transparent="0"/>
     </screen>""".format(PLUGIN_VERSION, PLUGIN_PATH)
 
     def __init__(self, session):
@@ -80,10 +82,11 @@ class MainScreen(Screen):
         self["list"] = MenuList([], enableWrapAround=True)
         self["list"].selectionEnabled(1)
         self["status_label"] = Label("")
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions"],
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "MenuActions"],
                                     {"ok": self.openContent, "cancel": self.exit,
                                      "red": self.exit, "green": self.addUrl,
-                                     "yellow": self.openSettings, "blue": self.startScrape}, -2)
+                                     "yellow": self.openSettings, "blue": self.startScrape,
+                                     "menu": self.openContextMenu}, -2)
 
         self.container = eConsoleAppContainer()
         self.container.appClosed.append(self.command_finished)
@@ -93,6 +96,59 @@ class MainScreen(Screen):
 
         self.loadAddresses()
         self.check_for_updates()
+
+    def openContextMenu(self):
+        """Otvara kontekstni meni za dodatne opcije"""
+        current_url = self["list"].getCurrent()
+        if not current_url:
+            return
+
+        menu = [
+            ("Scrape this URL", "scrape_current"),
+            ("Scrape from Content Screen", "scrape_from_content"),
+            ("Delete URL", "delete_url"),
+            ("Edit URL", "edit_url"),
+        ]
+
+        def context_callback(choice):
+            if choice:
+                action = choice[1]  # Drugi element tuple-a je akcija
+                if action == "scrape_current":
+                    self.startScrape()
+                elif action == "scrape_from_content":
+                    self.openContentForScrape()
+                elif action == "delete_url":
+                    self.deleteUrl(current_url)
+                elif action == "edit_url":
+                    self.editUrl(current_url)
+
+        self.session.openWithCallback(context_callback, ChoiceBox,
+                                      title=f"Options for:\n{current_url[:80]}...",
+                                      list=menu)
+
+
+    def contextMenuCallback(self, choice):
+        """Obrađuje odabir iz kontekstnog menija"""
+        if not choice:
+            return
+
+        action = choice[1]
+        current_url = self["list"].getCurrent()
+
+        if action == "scrape_current":
+            self.startScrape()
+        elif action == "scrape_from_content":
+            self.openContentForScrape()
+        elif action == "delete_url":
+            self.deleteUrl(current_url)
+        elif action == "edit_url":
+            self.editUrl(current_url)
+
+    def openContentForScrape(self):
+        """Otvara Content Screen sa opcijom za scrape foldera"""
+        url = self["list"].getCurrent()
+        if url:
+            self.session.open(ContentScreen, url, mode="scrape")
 
     def loadAddresses(self):
         try:
@@ -200,6 +256,54 @@ class MainScreen(Screen):
             self.container.execute("sleep 2 && killall -9 enigma2")
         else:
             self["status_label"].setText("Update failed.")
+
+    def deleteUrl(self, url):
+        """Briše URL iz liste"""
+        current = self["list"].getList() or []
+        if url in current:
+            current.remove(url)
+            self["list"].setList(current)
+
+            # Sačuvaj promene u fajl
+            with open(OPENDIRECTORIES_FILE, "w", encoding="utf-8") as f:
+                for u in current:
+                    f.write(u + "\n")
+
+            self["status_label"].setText(f"Deleted: {url[:50]}...")
+
+    def editUrl(self, url):
+        """Edituje postojeći URL"""
+        self.session.openWithCallback(
+            lambda new_url: self.urlEdited(url, new_url),
+            VirtualKeyBoard,
+            title="Edit URL:",
+            text=url
+        )
+
+    def urlEdited(self, old_url, new_url):
+        """Obrada editovanog URL-a"""
+        if not new_url or not new_url.strip():
+            return
+
+        new_url = new_url.strip().rstrip('/') + '/'
+
+        if not new_url.startswith(('http://', 'https://')):
+            self.session.open(MessageBox, "Invalid URL! Must start with http:// or https://",
+                              MessageBox.TYPE_ERROR)
+            return
+
+        current = self["list"].getList() or []
+        if old_url in current:
+            index = current.index(old_url)
+            current[index] = new_url
+            self["list"].setList(current)
+
+            # Sačuvaj promene
+            with open(OPENDIRECTORIES_FILE, "w", encoding="utf-8") as f:
+                for u in current:
+                    f.write(u + "\n")
+
+            self["status_label"].setText(f"Updated URL")
 
 # =================================== SETTINGS ===================================
 class SettingsScreen(ConfigListScreen, Screen):
@@ -335,7 +439,7 @@ class ScrapeScreen(Screen):
         self.timer.start(200, True)
 
     def scan_next_folder(self):
-        """Skenira sledeći folder u redu"""
+        """Skenira sledeći folder sa boljom kontrolom"""
         if self.stop:
             self.finalize_scan()
             return
@@ -346,55 +450,109 @@ class ScrapeScreen(Screen):
 
         try:
             url, depth = self.folders_to_scan.pop(0)
+
+            # Proveri da li je URL dostupan pre nego što ga skeniraš
+            if not self._check_url_accessible(url):
+                print(f"[WARNING] Skipping inaccessible URL: {url}")
+                self.timer.start(100, True)
+                return
+
             self.current_folder = url
             self.current_depth = depth
 
-            total_done = self.scanned_folders + 1
-            total_queued = len(self.folders_to_scan)
-            progress = min(99, int((total_done / (total_done + total_queued + 1)) * 100))
-            self["progress"].setValue(progress)
-            self["progress_text"].setText(f"Progress: {progress}% - Scanning depth {depth}")
-            self["current_folder"].setText(f"Scanning: {url}")
-            self["depth_info"].setText(f"Depth: {depth}/{self.max_depth} | Folders left: {len(self.folders_to_scan)}")
+            # DEBUG
+            print(f"[Scrape] Scanning: {url}, Depth: {depth}")
 
-            import ssl
-            ssl._create_default_https_context = ssl._create_unverified_context
+            # Parsiraj direktorijum sa timeout-om
+            items = self._parse_directory_with_timeout(url, timeout=15)
 
-            items = self._parse_directory_fast(url)
+            # DEBUG
+            print(f"[Scrape] Found {len(items)} items in {url}")
+            for i, item in enumerate(items[:5]):  # Prikazi prvih 5 stavki za debug
+                print(f"[Scrape] Item {i}: {item}")
+
             self.scanned_folders += 1
+
             new_folders = 0
             new_files = 0
 
             for item in items:
                 if self.stop:
                     break
+
                 if item[2] == 'folder' and depth < self.max_depth:
-                    self.folders_to_scan.append((item[1], depth + 1))
-                    new_folders += 1
+                    # Dodaj novi folder samo ako nije već u redu
+                    if (item[1], depth + 1) not in self.folders_to_scan:
+                        self.folders_to_scan.append((item[1], depth + 1))
+                        new_folders += 1
+                        print(f"[Scrape] Added folder to queue: {item[1]}")
                 elif item[2] == 'file' and self.filter_file(item[0], config.ciefp.scrape_filter.value):
                     if item not in self.found_files:
                         self.found_files.append(item)
                         new_files += 1
+                        print(f"[Scrape] Found file: {item[0]}")
+
+            print(f"[Scrape] New folders: {new_folders}, New files: {new_files}")
 
             self.updateStats(new_folders, new_files)
 
         except Exception as e:
             print(f"[Scrape] Error scanning {self.current_folder}: {e}")
+            import traceback
+            traceback.print_exc()
 
-        if not self.stop and hasattr(self, "timer"):
-            if self.folders_to_scan:
-                self.timer.stop()
-                try:
-                    self.timer.callback.clear()
-                except:
-                    self.timer.callback = []
-                self.timer.callback.append(self.scan_next_folder)
-                self.timer.start(200, True)
-            else:
-                self.finalize_scan()
+        if not self.stop:
+            # Podesi sledeći timer sa promenljivim intervalom
+            delay = 100  # osnovni delay
+            if len(self.folders_to_scan) > 50:
+                delay = 50  # ubrzaj ako ima puno u redu
+            elif len(self.folders_to_scan) > 100:
+                delay = 25  # još brže za vrlo velike redove
+
+            self.timer.start(delay, True)
+
+    def _check_url_accessible(self, url):
+        """Proverava da li je URL dostupan"""
+        try:
+            req = urllib.request.Request(url, method='HEAD', headers={
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': 'text/html'
+            })
+            with urllib.request.urlopen(req, timeout=5) as response:
+                return response.status == 200
+        except:
+            return False
+
+    def _parse_directory_with_timeout(self, directory_url, timeout=10):
+        """Parsiranje sa timeout kontrolom"""
+        import threading
+        import queue
+
+        result_queue = queue.Queue()
+
+        def parse_worker():
+            try:
+                items = self._parse_directory_fast(directory_url)
+                result_queue.put(items)
+            except Exception as e:
+                result_queue.put([])
+
+        thread = threading.Thread(target=parse_worker)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout)
+
+        if thread.is_alive():
+            print(f"[TIMEOUT] Parsing {directory_url} took too long")
+            return []
+
+        try:
+            return result_queue.get_nowait()
+        except queue.Empty:
+            return []
 
     def _parse_directory_fast(self, directory_url):
-        """Brzo parsiranje direktorijuma"""
+        """Brzo parsiranje direktorijuma - POPRAVLJENO"""
         items = []
         try:
             req = urllib.request.Request(directory_url, headers={
@@ -405,32 +563,43 @@ class ScrapeScreen(Screen):
             with urllib.request.urlopen(req, timeout=10) as response:
                 html = response.read().decode('utf-8', errors='ignore')
 
-                links = re.findall(r'<a\s+href="([^"]*?)"[^>]*>(.*?)</a>', html, re.IGNORECASE)
+                # Poboljšani regex koji hvata više vrsta HTML linkova
+                # Stari regex: links = re.findall(r'<a\s+href="([^"]*?)"[^>]*>(.*?)</a>', html, re.IGNORECASE)
+
+                # Novi, opširniji regex
+                links = re.findall(r'<a\s+(?:[^>]*?\s+)?href="([^"]+)"(?:[^>]*?)>(.*?)</a>', html,
+                                   re.IGNORECASE | re.DOTALL)
+
+                # Alternativno, možemo koristiti opštiju metodu
+                # links = re.findall(r'href=[\'"]?([^\'" >]+)[\'"]?[^>]*>([^<]*)</a>', html, re.IGNORECASE)
 
                 for href, name in links:
                     if self.stop:
                         break
 
                     href = href.strip()
-                    if not href or href in ('../', './') or href.startswith(('?', '#')):
+                    if not href or href in ('../', './') or href.startswith(('?', '#', 'mailto:', 'javascript:')):
                         continue
 
+                    # Očisti ime od HTML tagova
                     clean_name = re.sub(r'<[^>]+>', '', name).strip()
 
-                    # Ako je skraćeno ("..&gt;"), koristi ime iz href
-                    if '&gt;' in clean_name or '..' in clean_name:
+                    # Ako je ime prazno ili skraćeno, koristi naziv iz href-a
+                    if not clean_name or clean_name == '..' or '&gt;' in clean_name:
+                        # Izvuci poslednji deo putanje kao naziv
                         clean_name = urllib.parse.unquote(os.path.basename(href))
 
-                    if not clean_name:
-                        clean_name = urllib.parse.unquote(os.path.basename(href))
-
+                    # Popravi URL - dodaj base URL ako je potrebno
                     full_url = urllib.parse.urljoin(directory_url, href.split('?')[0].split('#')[0])
 
+                    # Proveri da li je folder ili fajl
                     if href.endswith('/') or full_url.endswith('/'):
+                        # To je folder
                         folder_name = clean_name.rstrip('/')
                         if folder_name and folder_name not in ('.', '..'):
                             items.append((folder_name, full_url, 'folder'))
                     else:
+                        # Proveri da li je podržani format
                         if self.is_supported_format(clean_name):
                             items.append((clean_name, full_url, 'file'))
 
@@ -439,12 +608,18 @@ class ScrapeScreen(Screen):
         except Exception as e:
             print(f"[Parse] General Error: {e}")
 
+        # Debug informacije
+        print(f"[Scrape] Parsed {directory_url}: {len(items)} items")
+        if items:
+            print(f"[Scrape] Sample items: {items[:3]}")
+
         return items
 
     def is_supported_format(self, filename):
+        """Proširena lista podržanih formata"""
         filename_lower = filename.lower()
-        video_formats = ('.mp4', '.mkv', '.avi', '.ts')
-        audio_formats = ('.mp3', '.flac')
+        video_formats = ('.mp4', '.mkv', '.avi', '.ts', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg')
+        audio_formats = ('.mp3', '.flac', '.wav', '.aac', '.ogg', '.wma', '.m4a')
         return filename_lower.endswith(video_formats + audio_formats)
 
     def filter_file(self, filename, filter_mode):
@@ -551,34 +726,48 @@ class ContentScreen(Screen):
         <ePixmap pixmap="buttons/red.png" position="50,720" size="35,35" alphatest="blend" />
         <eLabel text="Back" position="100,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
         <ePixmap pixmap="buttons/green.png" position="320,720" size="35,35" alphatest="blend" />
-        <eLabel text="Select Folder" position="370,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
+        <eLabel text="Select/Scrape" position="370,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
         <ePixmap pixmap="buttons/yellow.png" position="590,720" size="35,35" alphatest="blend" />
         <eLabel text="Create" position="640,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
         <ePixmap pixmap="buttons/blue.png" position="860,720" size="35,35" alphatest="blend" />
         <eLabel text="All" position="910,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
     </screen>""".format(PLUGIN_VERSION, PLUGIN_PATH)
 
-    def __init__(self, session, base_url):
+    def __init__(self, session, base_url, mode="normal"):
         Screen.__init__(self, session)
         self.base_url = base_url.rstrip('/') + '/'
         self.current_url = self.base_url
         self.history = [self.current_url]
         self.content_items = []
         self.selected = []
-        self.load_error = None  # Za čuvanje greške
+        self.load_error = None
+        self.mode = mode  # "normal" ili "scrape"
 
         self["content_list"] = MenuList([], enableWrapAround=True)
         self["content_list"].selectionEnabled(1)
         self["selected_list"] = ScrollLabel("")
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "WizardActions", "ListboxActions"],
-                                    {
-                                        "ok": self.selectItem,  # OK: navigacija ili selekcija fajla
-                                        "cancel": self.goBack,
-                                        "red": self.goBack,
-                                        "green": self.selectFolder,  # Novo: zeleno za selekciju cijelog foldera
-                                        "yellow": self.createFile,
-                                        "blue": self.selectAll
-                                    }, -2)
+
+        # Promenjeno: Dodata opcija za scrape u zavisnosti od moda
+        if self.mode == "scrape":
+            self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "WizardActions", "ListboxActions"],
+                                        {
+                                            "ok": self.selectItem,
+                                            "cancel": self.goBack,
+                                            "red": self.goBack,
+                                            "green": self.scrapeFolder,  # Novo: scrape foldera
+                                            "yellow": self.createFile,
+                                            "blue": self.selectAll
+                                        }, -2)
+        else:
+            self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "WizardActions", "ListboxActions"],
+                                        {
+                                            "ok": self.selectItem,
+                                            "cancel": self.goBack,
+                                            "red": self.goBack,
+                                            "green": self.selectFolder,
+                                            "yellow": self.createFile,
+                                            "blue": self.selectAll
+                                        }, -2)
 
         # Timer za odloženo učitavanje i prikaz greške
         self.loadTimer = eTimer()
@@ -599,7 +788,7 @@ class ContentScreen(Screen):
         self.goBack()  # Automatski se vrati nazad ako je greška
 
     def _parse_directory(self, directory_url):
-        """Parsira direktorij i vraća listu (name, full_url, 'file') ili 'folder'"""
+        """Parsira direktorij i vraća listu (name, full_url, 'file') ili 'folder' - POPRAVLJENO"""
         items = []
         try:
             req = urllib.request.Request(directory_url, headers={
@@ -608,13 +797,15 @@ class ContentScreen(Screen):
             response = urllib.request.urlopen(req, timeout=30)
             html = response.read().decode('utf-8', errors='ignore')
 
-            links = re.findall(r'<a\s+href="([^"]+)"[^>]*>([^<]+)</a>', html)
+            # Poboljšani regex
+            links = re.findall(r'<a\s+(?:[^>]*?\s+)?href="([^"]+)"(?:[^>]*?)>(.*?)</a>', html,
+                               re.IGNORECASE | re.DOTALL)
 
             for href, raw_name in links:
                 href = href.strip()
                 raw_name = raw_name.strip()
 
-                if href.startswith('?'):
+                if href.startswith(('?', '#', 'mailto:', 'javascript:')):
                     continue
 
                 href_clean = href.split('?')[0].split('#')[0]
@@ -629,20 +820,23 @@ class ContentScreen(Screen):
                 full_url = urllib.parse.urljoin(directory_url, href_clean)
 
                 # Očisti prikazani naziv
-                display_name = raw_name
-                if '&gt;' in display_name:
-                    display_name = display_name.replace('&gt;', '') + '...'
+                display_name = re.sub(r'<[^>]+>', '', raw_name).strip()
+
+                if not display_name or display_name == '..' or '&gt;' in display_name:
+                    display_name = urllib.parse.unquote(os.path.basename(href_clean))
 
                 # Folder
-                if href_clean.endswith('/'):
-                    folder_name = display_name.rstrip('/') if display_name.endswith('/') else display_name
-                    items.append((folder_name, full_url, 'folder'))
-                # Fajl
-                elif decoded_href.lower().endswith(('.mp4', '.mkv', '.mp3', '.flac', '.avi', '.ts')):
-                    # Ako je naziv prekratak → koristi puni iz href-a
-                    if '...' in display_name or len(display_name) < len(decoded_href) - 10:
-                        display_name = urllib.parse.unquote(os.path.basename(href_clean))
-                    items.append((display_name, full_url, 'file'))
+                if href_clean.endswith('/') or full_url.endswith('/'):
+                    folder_name = display_name.rstrip('/')
+                    if folder_name and folder_name not in ('.', '..'):
+                        items.append((folder_name, full_url, 'folder'))
+                else:
+                    # Prošireni format fajlova
+                    supported_formats = ('.mp4', '.mkv', '.mp3', '.flac', '.avi', '.ts', '.mov', '.wmv',
+                                         '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.wav', '.aac', '.ogg')
+
+                    if decoded_href.lower().endswith(supported_formats):
+                        items.append((display_name, full_url, 'file'))
 
         except Exception as e:
             print(f"[CiefpOpenDirectories] _parse_directory error: {e}")
@@ -741,6 +935,78 @@ class ContentScreen(Screen):
     def updateSelectedList(self):
         text = "\n".join([f"[SELECTED] {s[0]}" for s in self.selected])
         self["selected_list"].setText(text)
+
+    def scrapeFolder(self):
+        """Pokreće scrape na trenutnom folderu"""
+        idx = self["content_list"].getSelectedIndex()
+        if idx is None or idx >= len(self.content_items):
+            # Ako nije selektovan folder, skrapuj trenutni URL
+            scrape_url = self.current_url
+        else:
+            item = self.content_items[idx]
+            if item[2] != 'folder':
+                self.session.open(MessageBox, "This is not a folder! Please select a folder first.",
+                                  MessageBox.TYPE_WARNING, timeout=3)
+                return
+            scrape_url = item[1]
+
+        # Pitaj korisnika za dubinu skrapovanja
+        def depth_callback(choice):
+            if choice:
+                # choice je tuple: (value, display_text)
+                depth_str = choice[0]  # Prvi element je vrednost ("1", "2", "3", "0")
+                self.startScraping(scrape_url, int(depth_str))
+
+        self.session.openWithCallback(
+            depth_callback,
+            ChoiceBox,
+            title=f"Select scrape depth for:\n{scrape_url[:80]}...",
+            list=[("1", "1 level"), ("2", "2 levels"), ("3", "3 levels"),
+                  ("0", "Unlimited (careful!)")]
+        )
+
+    def startScraping(self, url, depth):
+        """Pokreće ScrapeScreen sa odabranom dubinom"""
+        # Sačuvaj trenutnu dubinu u config
+        config.ciefp.scrape_depth.value = str(depth)
+        config.ciefp.scrape_depth.save()
+
+        # Pokreni scrape
+        self.session.open(ScrapeScreen, url)
+        # Zatvori ovaj ekran nakon pokretanja scrape-a
+        self.close()
+
+    # Optimizovana rekurzivna funkcija da izbegne zamrzavanje
+    def _recursive_select_folder(self, folder_url, folder_count, added=None, max_time=30):
+        """Optimizovana verzija sa timeout-om"""
+        if added is None:
+            added = []
+
+        import time
+        start_time = time.time()
+
+        try:
+            # Učitaj sadržaj foldera
+            items = self._parse_directory(folder_url)
+            folder_count[0] += 1
+
+            for item in items:
+                # Proveri timeout
+                if time.time() - start_time > max_time:
+                    print(f"[WARNING] Timeout reached while scanning {folder_url}")
+                    return added
+
+                if item[2] == 'folder':
+                    # Rekurzivno skeniraj podfolder sa timeout kontrolom
+                    self._recursive_select_folder(item[1], folder_count, added, max_time - (time.time() - start_time))
+                elif item[2] == 'file' and item not in self.selected:
+                    self.selected.append(item)
+                    added.append(item)
+
+        except Exception as e:
+            print(f"[ERROR] Error scanning folder {folder_url}: {e}")
+
+        return added
 
     def goBack(self):
         if len(self.history) > 1:
