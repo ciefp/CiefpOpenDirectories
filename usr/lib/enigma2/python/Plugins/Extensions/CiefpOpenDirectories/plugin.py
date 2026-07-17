@@ -11,6 +11,7 @@ from Components.Label import Label
 from Components.ConfigList import ConfigListScreen
 from Components.ProgressBar import ProgressBar  # <-- DODATO!
 from Components.config import config, ConfigSubsection, ConfigText, ConfigYesNo, ConfigSelection, configfile
+from Components.Pixmap import Pixmap
 from enigma import eDVBDB, eTimer, eConsoleAppContainer
 from skin import parseColor
 import re
@@ -23,7 +24,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # === KONFIGURACIJA ===
-PLUGIN_VERSION = "1.4"
+PLUGIN_VERSION = "1.5"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/"
 TMP_PATH = "/tmp/CiefpOpenDirectories/"
 OPENDIRECTORIES_FILE = PLUGIN_PATH + "opendirectories.txt"
@@ -60,28 +61,40 @@ UPDATE_COMMAND = "wget -q --no-check-certificate https://raw.githubusercontent.c
 # =================================== MAIN SCREEN ===================================
 class MainScreen(Screen):
     skin = """
-    <screen name="MainScreen" position="center,center" size="1800,900" title="..:: CiefpOpenDirectories v{} - Main Menu ::..">
-        <widget name="list" position="0,0" size="1400,800" scrollbarMode="showOnDemand" itemHeight="33" font="Regular;28"  />
-        <widget name="status_label" position="1550,820" size="200,40" font="Regular;26" halign="left" valign="center" foregroundColor="#00ff00" backgroundColor="#10000000" transparent="1" />
-        <ePixmap pixmap="{}background.png" position="1400,0" size="400,800" alphatest="on" />
-        <!-- Dugmad -->
-        <ePixmap pixmap="buttons/red.png" position="50,830" size="35,35" alphatest="blend" />
-        <eLabel text="Exit" position="100,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/green.png" position="350,830" size="35,35" alphatest="blend" />
-        <eLabel text="Add URL" position="400,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/yellow.png" position="650,830" size="35,35" alphatest="blend" />
-        <eLabel text="Settings" position="700,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/blue.png" position="950,830" size="35,35" alphatest="blend" />
-        <eLabel text="Scrape" position="1000,820" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/green.png" position="1250,830" size="35,35" alphatest="blend" />
-        <eLabel text="MENU: More" position="1300,820" size="200,50" font="Regular;24" foregroundColor="white" backgroundColor="#023030" halign="center" valign="center" transparent="0"/>
-    </screen>""".format(PLUGIN_VERSION, PLUGIN_PATH)
+    <screen name="MainScreen" position="center,center" size="1920,1080" backgroundColor="#011a2e" >
+        <widget name="plugin_title" position="0,10" size="1920,50" font="Bold;34" halign="center" backgroundColor="#012e01" foregroundColor="#00FF00" text="..:: CiefpOpenDirectories ::.." />
+
+        <widget name="list" position="20,80" size="1480,840" scrollbarMode="showAlways" itemHeight="35" font="Regular;28" backgroundColor="#011a2e" foregroundColor="#FFFFFF" selectionBackgroundColor="#1a4a7a" />
+
+        <widget name="status_label" position="20,940" size="500,55" font="Regular;26" halign="left" valign="center" foregroundColor="#FFD700" backgroundColor="#011a2e" text="Status: Ready" />
+
+        <widget name="background" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/background.png" position="1500,80" size="400,840" zPosition="-1" alphatest="on" />
+
+        <!-- Ciefp stil dugmad -->
+        <widget name="button_red" position="20,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F1313" foregroundColor="#FFFFFF" text="Exit" />
+        <widget name="button_green" position="290,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#1F771F" foregroundColor="#FFFFFF" text="Add URL" />
+        <widget name="button_yellow" position="560,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F9F13" foregroundColor="#000000" text="Settings" />
+        <widget name="button_blue" position="830,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#132B9F" foregroundColor="#FFFFFF" text="Scrape" />
+
+        <widget name="version_info" position="1100,985" size="800,50" font="Regular;26" foregroundColor="#00BFFF" backgroundColor="#011a2e" halign="right" text="Version: {version}" />
+    </screen>
+    """.format(version=PLUGIN_VERSION)
 
     def __init__(self, session):
         Screen.__init__(self, session)
         self["list"] = MenuList([], enableWrapAround=True)
         self["list"].selectionEnabled(1)
-        self["status_label"] = Label("")
+        self["background"] = Pixmap()
+        self["status_label"] = Label("Status: Ready")
+        self["plugin_title"] = Label("..:: CiefpOpenDirectories ::..")
+
+        # Dugmad
+        self["button_red"] = Label("Exit")
+        self["button_green"] = Label("Add URL")
+        self["button_yellow"] = Label("Settings")
+        self["button_blue"] = Label("Scrape")
+        self["version_info"] = Label("Version: " + PLUGIN_VERSION)
+
         self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "MenuActions"],
                                     {"ok": self.openContent, "cancel": self.exit,
                                      "red": self.exit, "green": self.addUrl,
@@ -308,17 +321,21 @@ class MainScreen(Screen):
 # =================================== SETTINGS ===================================
 class SettingsScreen(ConfigListScreen, Screen):
     skin = """
-    <screen position="center,center" size="1200,800" title="..:: CiefpOpenDirectories - Settings ::..">
-        <widget name="config" position="20,20" size="750,650" itemHeight="33" font="Regular;28"  scrollbarMode="showOnDemand" />
-        <ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/settings.png" position="800,0" size="400,800" alphatest="on" />
-        <ePixmap pixmap="buttons/red.png" position="50,720" size="35,35" alphatest="blend" />
-        <eLabel text="Exit" position="100,710" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/green.png" position="500,720" size="35,35" alphatest="blend" />
-        <eLabel text="Save" position="550,710" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
+    <screen position="center,center" size="1920,1080"  title="..:: SettingsScreen ::.." backgroundColor="#011a2e">
+        <widget name="title" render="Label" position="100,80" size="1600,60" font="Regular;34" halign="center" valign="center" foregroundColor="#00FF00" text="..:: CiefpOpenDirectories Settings ::.." backgroundColor="#050505" zPosition="3" />
+        <widget name="config" position="100,150" size="1100,720" scrollbarMode="showOnDemand" itemHeight="36" font="Regular;26"  backgroundColor="#012e01" />
+        <ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/settings.png" position="1200,150" size="500,720" alphatest="on" />
+        <widget name="title2" render="Label" position="100,870" size="1600,80" font="Regular;34" halign="center" valign="center" foregroundColor="#ffffff" backgroundColor="#050505" zPosition="2" />
+        <ePixmap pixmap="buttons/red.png" position="150,900" size="35,35" alphatest="blend" zPosition="2" />
+        <eLabel text="Exit" position="200,890" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" zPosition="2" />
+        <ePixmap pixmap="buttons/green.png" position="600,900" size="35,35" alphatest="blend" zPosition="2" />
+        <eLabel text="Save" position="650,890" size="200,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" zPosition="2" />
     </screen>"""
 
     def __init__(self, session):
         Screen.__init__(self, session)
+        self["title"] = Label("..:: CiefpOpenDirectories Settings ::..")
+        self["title2"] = Label("")
         list = []
         list.append(("Default Playlist Name", config.ciefp.default_name))
         list.append(("Include Date in Filename", config.ciefp.include_date))
@@ -714,24 +731,30 @@ class ScrapeScreen(Screen):
         else:
             self.close()
 
+
 # =================================== CONTENT SCREEN (v1.1) ===================================
 
 class ContentScreen(Screen):
     skin = """
-    <screen name="ContentScreen" position="center,center" size="1800,800" title="..:: Directory Content v{} - Second Screen ::..">
-        <widget name="content_list" position="0,0" size="700,700" itemHeight="33" font="Regular;28"  scrollbarMode="showOnDemand" />
-        <widget name="selected_list" position="750,0" size="650,700" font="Regular;20" scrollbarMode="showOnDemand" />
-        <ePixmap pixmap="{}background.png" position="1400,0" size="400,800" alphatest="on" />
-        <!-- Dugmad -->
-        <ePixmap pixmap="buttons/red.png" position="50,720" size="35,35" alphatest="blend" />
-        <eLabel text="Back" position="100,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#800000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/green.png" position="320,720" size="35,35" alphatest="blend" />
-        <eLabel text="Select/Scrape" position="370,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#008000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/yellow.png" position="590,720" size="35,35" alphatest="blend" />
-        <eLabel text="Create" position="640,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#808000" halign="center" valign="center" transparent="0" />
-        <ePixmap pixmap="buttons/blue.png" position="860,720" size="35,35" alphatest="blend" />
-        <eLabel text="All" position="910,710" size="180,50" font="Regular;28" foregroundColor="white" backgroundColor="#000080" halign="center" valign="center" transparent="0" />
-    </screen>""".format(PLUGIN_VERSION, PLUGIN_PATH)
+    <screen name="ContentScreen" position="center,center" size="1920,1080" title="..:: Directory Content ::.." backgroundColor="#011a2e">
+        <widget name="plugin_title" position="0,10" size="1920,50" font="Bold;34" halign="center" backgroundColor="#012e01" foregroundColor="#00FF00" text="..:: Directory Content ::.." />
+
+        <widget name="content_list" position="20,80" size="740,840" itemHeight="42" font="Regular;32" backgroundColor="#011a2e" foregroundColor="#FFFFFF" selectionBackgroundColor="#1a4a7a" scrollbarMode="showAlways" />
+
+        <widget name="selected_list" position="780,80" size="740,840" font="Regular;28" foregroundColor="#FFD700" backgroundColor="#011a2e" scrollbarMode="showAlways" />
+
+        <widget name="background" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/background.png" position="1520,80" size="400,840" zPosition="-1" alphatest="on" />
+
+        <widget name="status_label" position="20,940" size="1000,55" font="Regular;26" backgroundColor="#011a2e" foregroundColor="#FFD700" text="Status: Ready" />
+
+        <!-- Ciefp stil dugmad -->
+        <widget name="button_red" position="20,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F1313" foregroundColor="#FFFFFF" text="Back" />
+        <widget name="button_green" position="290,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#1F771F" foregroundColor="#FFFFFF" text="Select/Scrape" />
+        <widget name="button_yellow" position="560,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F9F13" foregroundColor="#000000" text="Create" />
+        <widget name="button_blue" position="830,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#132B9F" foregroundColor="#FFFFFF" text="All" />
+
+        <widget name="version_info" position="1100,985" size="800,50" font="Regular;26" foregroundColor="#00BFFF" backgroundColor="#011a2e" halign="right" text="Version: {version}" />
+    </screen>""".format(version=PLUGIN_VERSION)
 
     def __init__(self, session, base_url, mode="normal"):
         Screen.__init__(self, session)
@@ -743,9 +766,19 @@ class ContentScreen(Screen):
         self.load_error = None
         self.mode = mode  # "normal" ili "scrape"
 
+        self["plugin_title"] = Label("..:: Directory Content ::..")
         self["content_list"] = MenuList([], enableWrapAround=True)
         self["content_list"].selectionEnabled(1)
         self["selected_list"] = ScrollLabel("")
+        self["background"] = Pixmap()
+        self["status_label"] = Label("Status: Ready")
+
+        # Dugmad
+        self["button_red"] = Label("Back")
+        self["button_green"] = Label("Select/Scrape")
+        self["button_yellow"] = Label("Create")
+        self["button_blue"] = Label("All")
+        self["version_info"] = Label("Version: " + PLUGIN_VERSION)
 
         # Promenjeno: Dodata opcija za scrape u zavisnosti od moda
         if self.mode == "scrape":
