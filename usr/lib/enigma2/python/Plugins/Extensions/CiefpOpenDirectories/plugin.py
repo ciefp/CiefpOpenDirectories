@@ -71,12 +71,17 @@ class MainScreen(Screen):
         <widget name="background" pixmap="/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/background.png" position="1500,80" size="400,840" zPosition="-1" alphatest="on" />
 
         <!-- Ciefp stil dugmad -->
-        <widget name="button_red" position="20,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F1313" foregroundColor="#FFFFFF" text="Exit" />
-        <widget name="button_green" position="290,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#1F771F" foregroundColor="#FFFFFF" text="Add URL" />
-        <widget name="button_yellow" position="560,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F9F13" foregroundColor="#000000" text="Settings" />
-        <widget name="button_blue" position="830,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#132B9F" foregroundColor="#FFFFFF" text="Scrape" />
-
-        <widget name="version_info" position="1100,985" size="800,50" font="Regular;26" foregroundColor="#00BFFF" backgroundColor="#011a2e" halign="right" text="Version: {version}" />
+        <ePixmap pixmap="buttons/red.png" position="20,985" size="35,35" alphatest="blend" />
+        <widget name="button_red" position="70,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F1313" foregroundColor="#FFFFFF" text="Exit" />
+        <ePixmap pixmap="buttons/green.png" position="370,985" size="35,35" alphatest="blend" />
+        <widget name="button_green" position="420,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#1F771F" foregroundColor="#FFFFFF" text="Add URL" />
+        <ePixmap pixmap="buttons/yellow.png" position="720,985" size="35,35" alphatest="blend" />
+        <widget name="button_yellow" position="770,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#9F9F13" foregroundColor="#000000" text="Settings" />
+        <ePixmap pixmap="buttons/blue.png" position="1070,985" size="35,35" alphatest="blend" />
+        <widget name="button_blue" position="1120,985" size="250,50" font="Bold;32" halign="center" backgroundColor="#132B9F" foregroundColor="#FFFFFF" text="Scrape" />
+        <ePixmap pixmap="buttons/green.png" position="1420,985" size="35,35" alphatest="blend" />
+        <eLabel text="MENU: More" position="1470,985" size="200,50" font="Regular;24" foregroundColor="white" backgroundColor="#023030" halign="center" valign="center" transparent="0"/>
+        <widget name="version_info" position="1500,985" size="400,50" font="Regular;26" foregroundColor="#00BFFF" backgroundColor="#011a2e" halign="right" text="Version: {version}" />
     </screen>
     """.format(version=PLUGIN_VERSION)
 
