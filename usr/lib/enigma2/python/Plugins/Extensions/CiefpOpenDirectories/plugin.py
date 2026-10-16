@@ -24,7 +24,7 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # === KONFIGURACIJA ===
-PLUGIN_VERSION = "1.5"
+PLUGIN_VERSION = "1.6"
 PLUGIN_PATH = "/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/"
 TMP_PATH = "/tmp/CiefpOpenDirectories/"
 OPENDIRECTORIES_FILE = PLUGIN_PATH + "opendirectories.txt"
@@ -326,7 +326,7 @@ class MainScreen(Screen):
 # =================================== SETTINGS ===================================
 class SettingsScreen(ConfigListScreen, Screen):
     skin = """
-    <screen position="center,center" size="1920,1080"  title="..:: SettingsScreen ::.." backgroundColor="#011a2e">
+    <screen position="center,center" size="1920,1080" backgroundColor="#011a2e">
         <widget name="title" render="Label" position="100,80" size="1600,60" font="Regular;34" halign="center" valign="center" foregroundColor="#00FF00" text="..:: CiefpOpenDirectories Settings ::.." backgroundColor="#050505" zPosition="3" />
         <widget name="config" position="100,150" size="1100,720" scrollbarMode="showOnDemand" itemHeight="36" font="Regular;26"  backgroundColor="#012e01" />
         <ePixmap pixmap="/usr/lib/enigma2/python/Plugins/Extensions/CiefpOpenDirectories/settings.png" position="1200,150" size="500,720" alphatest="on" />
@@ -741,7 +741,7 @@ class ScrapeScreen(Screen):
 
 class ContentScreen(Screen):
     skin = """
-    <screen name="ContentScreen" position="center,center" size="1920,1080" title="..:: Directory Content ::.." backgroundColor="#011a2e">
+    <screen name="ContentScreen" position="center,center" size="1920,1080" backgroundColor="#011a2e">
         <widget name="plugin_title" position="0,10" size="1920,50" font="Bold;34" halign="center" backgroundColor="#012e01" foregroundColor="#00FF00" text="..:: Directory Content ::.." />
 
         <widget name="content_list" position="20,80" size="740,840" itemHeight="42" font="Regular;32" backgroundColor="#011a2e" foregroundColor="#FFFFFF" selectionBackgroundColor="#1a4a7a" scrollbarMode="showAlways" />
@@ -826,8 +826,10 @@ class ContentScreen(Screen):
         self.goBack()  # Automatski se vrati nazad ako je greška
 
     def _parse_directory(self, directory_url):
-        """Parsira direktorij i vraća listu (name, full_url, 'file') ili 'folder' - POPRAVLJENO"""
+        """Parsira direktorij i vraća listu (name, full_url, 'file'/'folder'/'parent')"""
         items = []
+        parent_found = False
+
         try:
             req = urllib.request.Request(directory_url, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -835,7 +837,6 @@ class ContentScreen(Screen):
             response = urllib.request.urlopen(req, timeout=30)
             html = response.read().decode('utf-8', errors='ignore')
 
-            # Poboljšani regex
             links = re.findall(r'<a\s+(?:[^>]*?\s+)?href="([^"]+)"(?:[^>]*?)>(.*?)</a>', html,
                                re.IGNORECASE | re.DOTALL)
 
@@ -847,8 +848,27 @@ class ContentScreen(Screen):
                     continue
 
                 href_clean = href.split('?')[0].split('#')[0]
-                if not href_clean or href_clean in ('../', './'):
+                if not href_clean:
                     continue
+
+                # Očisti prikazani naziv od HTML tagova
+                display_name = re.sub(r'<[^>]+>', '', raw_name).strip()
+
+                # === DETEKCIJA PARENT DIREKTORIJUMA ===
+                # Prepoznaj: "../", "..", "Parent Directory", "Parent directory", "Up"
+                is_parent = False
+
+                if href_clean in ('../', '..', './'):
+                    is_parent = True
+                elif display_name.lower() in ('parent directory', 'parent', 'up', '..', '../'):
+                    is_parent = True
+                elif display_name.startswith('..') or display_name.startswith('Parent'):
+                    is_parent = True
+
+                if is_parent:
+                    continue  # Samo preskoči - parent dodajemo u loadContent()
+
+                # === KRAJ DETEKCIJE ===
 
                 try:
                     decoded_href = urllib.parse.unquote(href_clean)
@@ -856,9 +876,6 @@ class ContentScreen(Screen):
                     decoded_href = href_clean
 
                 full_url = urllib.parse.urljoin(directory_url, href_clean)
-
-                # Očisti prikazani naziv
-                display_name = re.sub(r'<[^>]+>', '', raw_name).strip()
 
                 if not display_name or display_name == '..' or '&gt;' in display_name:
                     display_name = urllib.parse.unquote(os.path.basename(href_clean))
@@ -869,7 +886,6 @@ class ContentScreen(Screen):
                     if folder_name and folder_name not in ('.', '..'):
                         items.append((folder_name, full_url, 'folder'))
                 else:
-                    # Prošireni format fajlova
                     supported_formats = ('.mp4', '.mkv', '.mp3', '.flac', '.avi', '.ts', '.mov', '.wmv',
                                          '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.wav', '.aac', '.ogg')
 
@@ -890,33 +906,106 @@ class ContentScreen(Screen):
 
         file_count = len([i for i in items if i[2] == 'file'])
         print(f"[CiefpOpenDirectories] loadContent - Files: {file_count}, Folders: {len(items) - file_count}")
+        print(f"[CiefpOpenDirectories] current_url: {self.current_url}")
+        print(f"[CiefpOpenDirectories] base_url: {self.base_url}")
 
-        items.sort(key=lambda x: (x[2] != 'folder', x[0].lower()))
+        # Sortiraj: folderi pa fajlovi
+        def sort_key(x):
+            order = {'parent': 0, 'folder': 1, 'file': 2}
+            return (order.get(x[2], 3), x[0].lower())
+
+        items.sort(key=sort_key)
+
+        # === AUTOMATSKI DODAJ PARENT AKO NISMO U ROOT-U ===
+        parent_url = self._calculate_parent_url(self.current_url)
+        print(f"[CiefpOpenDirectories] calculated parent_url: {parent_url}")
+
+        if parent_url:
+            # Ubaci parent na vrh liste
+            items.insert(0, ("..", parent_url, 'parent'))
+
         self.content_items = items
         self["content_list"].setList(
-            [f"{'[FOLDER]' if item[2] == 'folder' else '[FILE]'} {item[0]}" for item in items]
+            [self._format_item_name(item) for item in items]
         )
+
         if not items:
             self["content_list"].setList(["[INFO] The directory is empty."])
+
+    def _calculate_parent_url(self, url):
+        """
+        Izračunava parent URL iz trenutne putanje.
+        Vraća None ako smo već u root-u (nema više roditelja).
+
+        Primer:
+            http://212.200.115.2:8012/muzika/YU%20POP%20VREMEPLOV/
+            -> http://212.200.115.2:8012/muzika/
+
+            http://212.200.115.2:8012/muzika/
+            -> http://212.200.115.2:8012/
+
+            http://212.200.115.2:8012/
+            -> None (root)
+        """
+        # Ukloni trailing slash za lakšu obradu
+        url_clean = url.rstrip('/')
+
+        # Parsiraj URL
+        parsed = urllib.parse.urlparse(url_clean)
+        path = parsed.path  # npr. /muzika/YU%20POP%20VREMEPLOV
+
+        # Podeli putanju na segmente
+        path_parts = [p for p in path.split('/') if p]
+
+        # Ako nema segmenata putanje, u root-u smo - nema parent-a
+        if not path_parts:
+            return None
+
+        # Ako ima samo 1 segment, parent je root (samo domen)
+        if len(path_parts) == 1:
+            parent_path = '/'
+        else:
+            # Ukloni poslednji segment
+            parent_path = '/' + '/'.join(path_parts[:-1]) + '/'
+
+        # Sastavi parent URL
+        parent_url = f"{parsed.scheme}://{parsed.netloc}{parent_path}"
+
+        # Proveri da nismo na istom URL-u
+        if parent_url.rstrip('/') == url_clean.rstrip('/'):
+            return None
+
+        return parent_url
+
+    def _format_item_name(self, item):
+        """Formatira naziv stavke za prikaz u listi"""
+        if item[2] == 'parent':
+            return "[PARENT] .. (Back)"
+        elif item[2] == 'folder':
+            return f"[FOLDER] {item[0]}"
+        else:
+            return f"[FILE] {item[0]}"
 
     def selectFolder(self):
         idx = self["content_list"].getSelectedIndex()
         if idx is None or idx >= len(self.content_items):
             return
         item = self.content_items[idx]
+
+        if item[2] == 'parent':
+            self.session.open(MessageBox, "Use OK to go to parent directory.", MessageBox.TYPE_INFO, timeout=2)
+            return
         if item[2] != 'folder':
             self.session.open(MessageBox, "This is not a folder! Use OK to select files.", MessageBox.TYPE_WARNING,
                               timeout=3)
             return
 
         import time
-        start_time = time.time()  # Počni mjerenje vremena
-        folder_count = [0]  # Koristimo listu jer Python ne dozvoljava promjenu int u closure-u
+        start_time = time.time()
+        folder_count = [0]
 
-        # Počni rekurziju
         added_files = self._recursive_select_folder(item[1], folder_count)
-
-        elapsed = time.time() - start_time  # Završi mjerenje
+        elapsed = time.time() - start_time
 
         self.updateSelectedList()
 
@@ -928,29 +1017,18 @@ class ContentScreen(Screen):
         else:
             self.session.open(MessageBox, "No files found in this folder.", MessageBox.TYPE_INFO, timeout=3)
 
-    def _recursive_select_folder(self, folder_url, folder_count, added=None):
-        if added is None:
-            added = []
-
-        # Povećaj brojač foldera
-        folder_count[0] += 1
-
-        items = self._parse_directory(folder_url)
-        for item in items:
-            if item[2] == 'folder':
-                self._recursive_select_folder(item[1], folder_count, added)
-            elif item[2] == 'file' and item not in self.selected:
-                self.selected.append(item)
-                added.append(item)
-
-        return added
-
     def selectItem(self):
         idx = self["content_list"].getSelectedIndex()
         if idx is None or idx >= len(self.content_items):
             return
         item = self.content_items[idx]
-        if item[2] == 'folder':
+
+        if item[2] == 'parent':
+            # Idi na parent direktorijum (uvek dozvoljeno)
+            self.current_url = item[1]
+            self.history.append(self.current_url)
+            self.loadContent()
+        elif item[2] == 'folder':
             self.current_url = item[1]
             self.history.append(self.current_url)
             self.loadContent()
@@ -975,24 +1053,24 @@ class ContentScreen(Screen):
         self["selected_list"].setText(text)
 
     def scrapeFolder(self):
-        """Pokreće scrape na trenutnom folderu"""
         idx = self["content_list"].getSelectedIndex()
         if idx is None or idx >= len(self.content_items):
-            # Ako nije selektovan folder, skrapuj trenutni URL
             scrape_url = self.current_url
         else:
             item = self.content_items[idx]
+            if item[2] == 'parent':
+                self.session.open(MessageBox, "Cannot scrape parent directory. Select a folder.",
+                                  MessageBox.TYPE_WARNING, timeout=3)
+                return
             if item[2] != 'folder':
                 self.session.open(MessageBox, "This is not a folder! Please select a folder first.",
                                   MessageBox.TYPE_WARNING, timeout=3)
                 return
             scrape_url = item[1]
 
-        # Pitaj korisnika za dubinu skrapovanja
         def depth_callback(choice):
             if choice:
-                # choice je tuple: (value, display_text)
-                depth_str = choice[0]  # Prvi element je vrednost ("1", "2", "3", "0")
+                depth_str = choice[0]
                 self.startScraping(scrape_url, int(depth_str))
 
         self.session.openWithCallback(
@@ -1014,9 +1092,7 @@ class ContentScreen(Screen):
         # Zatvori ovaj ekran nakon pokretanja scrape-a
         self.close()
 
-    # Optimizovana rekurzivna funkcija da izbegne zamrzavanje
     def _recursive_select_folder(self, folder_url, folder_count, added=None, max_time=30):
-        """Optimizovana verzija sa timeout-om"""
         if added is None:
             added = []
 
@@ -1024,18 +1100,16 @@ class ContentScreen(Screen):
         start_time = time.time()
 
         try:
-            # Učitaj sadržaj foldera
             items = self._parse_directory(folder_url)
             folder_count[0] += 1
 
             for item in items:
-                # Proveri timeout
                 if time.time() - start_time > max_time:
-                    print(f"[WARNING] Timeout reached while scanning {folder_url}")
                     return added
 
+                if item[2] == 'parent':
+                    continue  # Preskoči parent u rekurziji
                 if item[2] == 'folder':
-                    # Rekurzivno skeniraj podfolder sa timeout kontrolom
                     self._recursive_select_folder(item[1], folder_count, added, max_time - (time.time() - start_time))
                 elif item[2] == 'file' and item not in self.selected:
                     self.selected.append(item)
